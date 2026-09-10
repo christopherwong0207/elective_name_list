@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="utf-8">
+    <title>學生點名人名表 (A4一紙兩份)</title>
+    <style>
+        /* ================= A4 直向列印規格 ================= */
+        @page {
+            size: A4 portrait;
+            margin: 6mm 8mm;
+        }
+        
+        body {
+            font-family: "Noto Sans CJK TC", "Microsoft JhengHei", "PingFang HK", "PingFang TC", sans-serif;
+            margin: 0;
+            padding: 10px;
+            background-color: #f1f3f5;
+            color: #000;
+        }
+        
+        * { 
+            box-sizing: border-box; 
+            -webkit-print-color-adjust: exact !important; 
+            print-color-adjust: exact !important; 
+        }
+
+        /* ================= 操作工具列 (列印時隱藏) ================= */
+        .toolbar {
+            max-width: 900px;
+            margin: 0 auto 15px auto;
+            padding: 15px 20px;
+            background: #fff;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.12);
+        }
+        .toolbar-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        
+        .import-section {
+            background-color: #f8f9fa;
+            border: 1px dashed #6c757d;
+            border-radius: 6px;
+            padding: 12px 15px;
+            margin-bottom: 12px;
+        }
+        .import-section h3 { margin: 0 0 6px 0; font-size: 15px; color: #333; }
+        .import-section p { font-size: 13px; color: #555; margin: 0 0 8px 0; }
+        .import-section textarea {
+            width: 100%;
+            height: 70px;
+            font-size: 13px;
+            padding: 8px;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            resize: vertical;
+            margin-bottom: 8px;
+        }
+
+        .sync-inputs {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 10px;
+            flex-wrap: wrap;
+        }
+        .sync-inputs label {
+            font-size: 13px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .sync-inputs input {
+            padding: 4px 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 13px;
+        }
+
+        .btn {
+            border: none;
+            padding: 9px 16px;
+            font-size: 14px;
+            font-weight: bold;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+        .btn-action { background-color: #007bff; color: #fff; }
+        .btn-import { background-color: #6f42c1; color: #fff; }
+        .btn-export { background-color: #fd7e14; color: #fff; }
+        .btn-clear  { background-color: #6c757d; color: #fff; }
+        .btn:hover { opacity: 0.9; }
+
+        /* ================= A4 單頁列印畫布 (寬 194mm x 高 285mm) ================= */
+        .print-container {
+            width: 194mm;
+            margin: 0 auto;
+            background: #fff;
+            padding: 4mm 2mm;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        /* 單個表格區塊 (上下各一個，高度嚴格限制防止分頁) */
+        .roster-card {
+            width: 100%;
+            height: 126mm;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+        }
+
+        /* 頂部資訊：Class, Subject, Date */
+        .header-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            font-size: 13pt;
+            font-weight: bold;
+            margin-bottom: 2mm;
+            padding: 0 2px;
+        }
+        .header-item {
+            display: flex;
+            align-items: baseline;
+        }
+        .underline-box {
+            display: inline-block;
+            min-width: 90px;
+            border-bottom: 1.5px solid #000;
+            margin-left: 6px;
+            padding: 0 4px;
+            text-align: center;
+            outline: none;
+        }
+        .underline-box.wide { min-width: 130px; }
+
+        /* 代號圖例 */
+        .legend-row {
+            display: flex;
+            font-size: 10pt;
+            font-weight: bold;
+            margin-bottom: 2mm;
+            padding: 0 2px;
+            letter-spacing: 0.5px;
+        }
+        .legend-item {
+            margin-right: 30px;
+        }
+
+        /* 表格主體 */
+        .roster-table {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+            border: 1.8px solid #000;
+        }
+        .roster-table th, .roster-table td {
+            border: 1px solid #000;
+            text-align: center;
+            vertical-align: middle;
+            padding: 0;
+            overflow: hidden;
+            height: 9.3mm;
+        }
+        .roster-table th {
+            height: 6.5mm;
+            font-size: 9pt;
+            font-weight: bold;
+            background-color: #fff;
+        }
+
+        /* 區塊分隔加粗右邊框 */
+        .border-right-bold {
+            border-right: 2px solid #000 !important;
+        }
+
+        .td-no { 
+            font-size: 8.5pt; 
+            font-weight: bold;
+            white-space: nowrap;
+            outline: none;
+        }
+        .td-name { 
+            font-size: 10.5pt; 
+            font-weight: normal; 
+            letter-spacing: 0.5px;
+            outline: none;
+            white-space: nowrap;
+        }
+        .td-check { font-size: 8pt; }
+
+        /* 中間裁切/對摺虛線 */
+        .cut-line {
+            width: 100%;
+            height: 10mm;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            margin: 2mm 0;
+        }
+        .cut-line::before {
+            content: "";
+            position: absolute;
+            left: 0;
+            right: 0;
+            top: 50%;
+            border-top: 1px dashed #777;
+        }
+        .cut-line span {
+            background-color: #fff;
+            padding: 0 10px;
+            font-size: 9pt;
+            color: #555;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* 編輯反饋 */
+        [contenteditable="true"]:hover { background-color: #fff9c4; cursor: text; }
+        [contenteditable="true"]:focus { background-color: #fff9c4; outline: 1px solid #ffb300; }
+
+        /* ================= Chrome 列印嚴格控管 ================= */
+        @media print {
+            html, body { 
+                width: 210mm !important;
+                height: 297mm !important;
+                margin: 0 !important; 
+                padding: 0 !important;
+                background: transparent !important;
+                overflow: hidden !important;
+            }
+            .toolbar, .no-print { display: none !important; }
+            .print-container { 
+                width: 194mm !important;
+                max-width: 194mm !important;
+                padding: 2mm 0 !important;
+                margin: 0 auto !important;
+                border: none !important;
+                box-shadow: none !important;
+                page-break-after: avoid !important;
+                page-break-inside: avoid !important;
+            }
+            .roster-card {
+                page-break-inside: avoid !important;
+                break-inside: avoid !important;
+            }
+            [contenteditable="true"] { background-color: transparent !important; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 操作工具列 -->
+    <div class="toolbar no-print">
+        <div class="import-section">
+            <h3>📥 / 📤 從 Excel 匯入 (上下兩表自動同步)</h3>
+            <p>請在 Excel 複製 <b>姓名、班別、學號</b>（3 個直行）。系統會合併「班別 + 學號」填入 <b>No.</b>，姓名填入 <b>Name</b>。</p>
+            
+            <div class="sync-inputs">
+                <label>科目 (Subject)：<input type="text" id="inputSubject" placeholder="如：中文 / 數學" oninput="syncHeader('subject', this.value)"></label>
+                <label>日期 (Date)：<input type="text" id="inputDate" placeholder="如：12/10" oninput="syncHeader('date', this.value)"></label>
+            </div>
+
+            <!-- 使用全虛擬範例資料 -->
+            <textarea id="excelInput" placeholder="在此貼上 Excel 內容（姓名[Tab]班別[Tab]學號）...&#10;範例：&#10;陳大文	1A	1&#10;李小明	1A	2&#10;張一心	1A	3"></textarea>
+            
+            <div style="display:flex; gap:10px;">
+                <button class="btn btn-import" onclick="importExcel()">📋 一鍵匯入至上下兩表</button>
+                <button class="btn btn-export" onclick="exportExcel()">📤 匯出目前名單</button>
+                <button class="btn btn-clear" onclick="clearAll()">🧹 清空表格</button>
+            </div>
+        </div>
+
+        <div class="toolbar-top">
+            <span style="font-size:13px; color:#444;">
+                💡 <b>Chrome 列印建議</b>：方向選「<b>直向</b>」、邊界選「<b>預設</b>」或「<b>無</b>」。
+            </span>
+            <button class="btn btn-action" onclick="printRoster()">🖨️ 列印 / 輸出 PDF (A4單頁雙表)</button>
+        </div>
+    </div>
+
+    <!-- 列印核心區塊 (包含上下兩個點名表) -->
+    <div class="print-container">
+        
+        <!-- ================= 上半部表格 ================= -->
+        <div class="roster-card" id="card-top">
+            <div class="header-info">
+                <div class="header-item">
+                    <span>Class:</span>
+                    <span id="top-class-text" class="underline-box" contenteditable="true"></span>
+                </div>
+                <div class="header-item">
+                    <span>Subject:</span>
+                    <span id="top-subject-text" class="underline-box wide" contenteditable="true"></span>
+                </div>
+                <div class="header-item">
+                    <span>Date:</span>
+                    <span id="top-date-text" class="underline-box wide" contenteditable="true"></span>
+                </div>
+            </div>
+
+            <div class="legend-row">
+                <div class="legend-item">A — 缺席</div>
+                <div class="legend-item">N — 未能依時遞交功課</div>
+                <div class="legend-item">O — 其他</div>
+            </div>
+
+            <table class="roster-table">
+                <colgroup>
+                    <col style="width: 7.2%;"><col style="width: 10.3%;"><col style="width: 2.5%;"><col style="width: 2.5%;"><col style="width: 2.5%;">
+                    <col style="width: 7.2%;"><col style="width: 10.3%;"><col style="width: 2.5%;"><col style="width: 2.5%;"><col style="width: 2.5%;">
+                    <col style="width: 7.2%;"><col style="width: 10.3%;"><col style="width: 2.5%;"><col style="width: 2.5%;"><col style="width: 2.5%;">
+                    <col style="width: 7.2%;"><col style="width: 10.3%;"><col style="width: 2.5%;"><col style="width: 2.5%;"><col style="width: 2.5%;">
+                </colgroup>
+                <thead>
+                    <tr>
+                        <th>No.</th><th>Name</th><th>A</th><th>N</th><th class="border-right-bold">O</th>
+                        <th>No.</th><th>Name</th><th>A</th><th>N</th><th class="border-right-bold">O</th>
+                        <th>No.</th><th>Name</th><th>A</th><th>N</th><th class="border-right-bold">O</th>
+                        <th>No.</th><th>Name</th><th>A</th><th>N</th><th>O</th>
+                    </tr>
+                </thead>
+                <tbody id="top-tbody"></tbody>
+            </table>
+        </div>
+
+        <!-- ================= 中間裁切/對摺虛線 ================= -->
+        <div class="cut-line">
+            <span>✂ 請在此處對摺或裁切 (一紙兩份)</span>
+        </div>
+
+        <!-- ================= 下半部表格 ================= -->
+        <div class="roster-card" id="card-bot">
+            <div class="header-info">
+                <div class="header-item">
+                    <span>Class:</span>
+                    <span id="bot-class-text" class="underline-box" contenteditable="true"></span>
+                </div>
+                <div class="header-item">
+                    <span>Subject:</span>
+                    <span id="bot-subject-text" class="underline-box wide" contenteditable="true"></span>
+                </div>
+                <div class="header-item">
+                    <span>Date:</span>
+                    <span id="bot-date-text" class="underline-box wide" contenteditable="true"></span>
+                </div>
+            </div>
+
+            <div class="legend-row">
+                <div class="legend-item">A — 缺席</div>
+                <div class="legend-item">N — 未能依時遞交功課</div>
+                <div class="legend-item">O — 其他</div>
+            </div>
+
+            <table class="roster-table">
+                <colgroup>
+                    <col style="width: 7.2%;"><col style="width: 10.3%;"><col style="width: 2.5%;"><col style="width: 2.5%;"><col style="width: 2.5%;">
+                    <col style="width: 7.2%;"><col style="width: 10.3%;"><col style="width: 2.5%;"><col style="width: 2.5%;"><col style="width: 2.5%;">
+                    <col style="width: 7.2%;"><col style="width: 10.3%;"><col style="width: 2.5%;"><col style="width: 2.5%;"><col style="width: 2.5%;">
+                    <col style="width: 7.2%;"><col style="width: 10.3%;"><col style="width: 2.5%;"><col style="width: 2.5%;"><col style="width: 2.5%;">
+                </colgroup>
+                <thead>
+                    <tr>
+                        <th>No.</th><th>Name</th><th>A</th><th>N</th><th class="border-right-bold">O</th>
+                        <th>No.</th><th>Name</th><th>A</th><th>N</th><th class="border-right-bold">O</th>
+                        <th>No.</th><th>Name</th><th>A</th><th>N</th><th class="border-right-bold">O</th>
+                        <th>No.</th><th>Name</th><th>A</th><th>N</th><th>O</th>
+                    </tr>
+                </thead>
+                <tbody id="bot-tbody"></tbody>
+            </table>
+        </div>
+
+    </div>
+
+    <script>
+        // 初始化生成上下兩表的表格列
+        function renderTableRows(tbodyId, prefix) {
+            const tbody = document.getElementById(tbodyId);
+            let html = '';
+            for (let r = 0; r < 10; r++) {
+                html += '<tr>';
+                for (let b = 0; b < 4; b++) {
+                    let idx = b * 10 + r + 1;
+                    let boldBorder = (b < 3) ? 'border-right-bold' : '';
+                    html += `
+                        <td class="td-no" id="${prefix}-no-${idx}" contenteditable="true"></td>
+                        <td class="td-name" id="${prefix}-name-${idx}" contenteditable="true"></td>
+                        <td class="td-check"></td>
+                        <td class="td-check"></td>
+                        <td class="td-check ${boldBorder}"></td>
+                    `;
+                }
+                html += '</tr>';
+            }
+            tbody.innerHTML = html;
+        }
+
+        renderTableRows('top-tbody', 'top');
+        renderTableRows('bot-tbody', 'bot');
+
+        // 同步修改科目和日期
+        function syncHeader(type, value) {
+            if (type === 'subject') {
+                document.getElementById('top-subject-text').textContent = value;
+                document.getElementById('bot-subject-text').textContent = value;
+            } else if (type === 'date') {
+                document.getElementById('top-date-text').textContent = value;
+                document.getElementById('bot-date-text').textContent = value;
+            }
+        }
+
+        // ================= Excel 匯入 (同步填入上下兩表) =================
+        function importExcel() {
+            const inputText = document.getElementById('excelInput').value.trim();
+            if (!inputText) {
+                alert('請先在文字框貼上 Excel 資料！');
+                return;
+            }
+
+            const lines = inputText.split('\n');
+            let detectedClasses = new Set();
+            let count = 0;
+
+            clearAll(false);
+
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i].trim();
+                if (!line) continue;
+
+                const cols = line.split('\t');
+                if (cols[0].includes('姓名') || cols[0].toLowerCase().includes('name')) continue;
+
+                let name = cols[0] ? cols[0].trim() : '';
+                let className = cols[1] ? cols[1].trim() : '';
+                let seatNo = cols[2] ? cols[2].trim().replace('號', '') : '';
+
+                if (className) detectedClasses.add(className);
+
+                count++;
+                if (count > 40) break;
+
+                let mergedNo = '';
+                if (className && seatNo) {
+                    mergedNo = `${className} ${seatNo}`;
+                } else {
+                    mergedNo = className || seatNo;
+                }
+
+                ['top', 'bot'].forEach(prefix => {
+                    const noEl = document.getElementById(`${prefix}-no-${count}`);
+                    const nameEl = document.getElementById(`${prefix}-name-${count}`);
+                    if (noEl) noEl.textContent = mergedNo;
+                    if (nameEl) nameEl.textContent = name;
+                });
+            }
+
+            let classDisplay = '';
+            if (detectedClasses.size === 1) {
+                classDisplay = Array.from(detectedClasses)[0];
+            }
+            document.getElementById('top-class-text').textContent = classDisplay;
+            document.getElementById('bot-class-text').textContent = classDisplay;
+
+            alert(`✅ 成功匯入 ${count} 位學生！\n上下兩個表格已同步填妥。`);
+            document.getElementById('excelInput').value = '';
+        }
+
+        // ================= 匯出目前名單 =================
+        function exportExcel() {
+            let exportData = '';
+            let exportCount = 0;
+
+            for (let i = 1; i <= 40; i++) {
+                const noEl = document.getElementById(`top-no-${i}`);
+                const nameEl = document.getElementById(`top-name-${i}`);
+                const no = noEl ? noEl.textContent.trim() : '';
+                const name = nameEl ? nameEl.textContent.trim() : '';
+
+                if (name || no) {
+                    let parts = no.split(' ');
+                    let cls = parts[0] || '';
+                    let num = parts[1] || '';
+                    exportData += `${name}\t${cls}\t${num}\n`;
+                    exportCount++;
+                }
+            }
+
+            if (exportCount === 0) {
+                alert('目前表格內沒有學生名單可供匯出！');
+                return;
+            }
+
+            const textArea = document.getElementById('excelInput');
+            textArea.value = exportData;
+
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(exportData).then(() => {
+                    alert('✅ 名單已複製到剪貼簿！');
+                }).catch(() => {
+                    alert('✅ 名單已產生於文字框，請手動複製。');
+                    textArea.select();
+                });
+            } else {
+                alert('✅ 名單已產生於文字框，請手動複製。');
+                textArea.select();
+            }
+        }
+
+        // ================= 清空表格 =================
+        function clearAll(showNotice = true) {
+            for (let i = 1; i <= 40; i++) {
+                ['top', 'bot'].forEach(prefix => {
+                    const noEl = document.getElementById(`${prefix}-no-${i}`);
+                    const nameEl = document.getElementById(`${prefix}-name-${i}`);
+                    if (noEl) noEl.textContent = '';
+                    if (nameEl) nameEl.textContent = '';
+                });
+            }
+            if (showNotice) alert('已清空上下兩表的學生資料！');
+        }
+
+        // ================= 獨立新分頁列印 =================
+        function printRoster() {
+            const printContent = document.querySelector('.print-container').innerHTML;
+            const styles = document.querySelector('style').innerHTML;
+
+            const printWindow = window.open('', '_blank');
+            if (!printWindow) {
+                alert('⚠️ 瀏覽器攔截了列印彈出視窗！請在網址列允許此網頁開啟「彈出式視窗」。');
+                return;
+            }
+
+            printWindow.document.open();
+            printWindow.document.write(`
+                <!DOCTYPE html>
+                <html lang="zh-HK">
+                <head>
+                    <meta charset="utf-8">
+                    <title>點名人名表列印 (A4一紙兩份)</title>
+                    <style>
+                        ${styles}
+                        body { background: transparent !important; padding: 0 !important; margin: 0 !important; }
+                    </style>
+                </head>
+                <body>
+                    <div class="print-container">
+                        ${printContent}
+                    </div>
+                    <script>
+                        window.onload = function() {
+                            setTimeout(function() {
+                                window.print();
+                            }, 250);
+                        };
+                    <\/script>
+                </body>
+                </html>
+            `);
+            printWindow.document.close();
+        }
+    </script>
+</body>
+</html>
